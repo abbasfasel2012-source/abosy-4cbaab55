@@ -2,7 +2,7 @@ import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
 import { SYSTEM_PROMPT } from "@/lib/persona.server";
 import { resolveModelId } from "@/lib/models";
 import { createFileRoute } from "@tanstack/react-router";
-import { streamText, type CoreMessage } from "ai";
+import { streamText, type UIMessage } from "ai";
 
 type ChatRequestBody = { messages?: unknown; model?: unknown };
 
@@ -28,29 +28,24 @@ export const Route = createFileRoute("/api/chat")({
           const modelId = resolveModelId(typeof requestedModel === "string" ? requestedModel : "auto");
           const model = gateway(modelId);
           
-          // Robust conversion to CoreMessage
-          const coreMessages: CoreMessage[] = messages.map((m: any) => {
-            let content = "";
-            if (m.content) {
-              content = m.content;
-            } else if (Array.isArray(m.parts)) {
-              content = m.parts.map((p: any) => p.text || "").join("");
-            }
-            
-            return {
-              role: m.role === 'user' ? 'user' : 'assistant',
-              content: content || " " // Ensure content is never truly empty
-            };
-          });
+          // Robust conversion to UIMessage for toUIMessageStreamResponse
+          const formattedMessages = (messages as any[]).map(m => ({
+            id: m.id || Math.random().toString(36).substring(7),
+            role: m.role === 'user' ? 'user' : 'assistant',
+            content: m.content || (Array.isArray(m.parts) ? m.parts.map((p: any) => p.text || "").join("") : ""),
+            parts: m.parts || [{ type: 'text', text: m.content || "" }]
+          })) as UIMessage[];
 
           const result = streamText({
             model,
             system: SYSTEM_PROMPT,
-            messages: coreMessages,
+            messages: formattedMessages as any, // streamText will handle UIMessage if shaped correctly
             temperature: 0.8,
           });
 
-          return result.toDataStreamResponse();
+          return result.toUIMessageStreamResponse({
+            originalMessages: formattedMessages,
+          });
         } catch (error) {
           console.error("Chat API Error:", error);
           return new Response(String(error), { status: 500 });
