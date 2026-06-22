@@ -13,6 +13,8 @@ import {
   PromptInputTextarea,
   PromptInputFooter,
   PromptInputSubmit,
+  usePromptInputAttachments,
+  type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import abosyLogo from "@/assets/abosy-logo.png";
@@ -23,7 +25,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Paperclip, Volume2, Square } from "lucide-react";
+import { AttachmentsBar } from "@/components/chat/attachments-bar";
+import { inlineFilePartUrls } from "@/lib/file-utils";
+import { useSpeak } from "@/lib/use-speak";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -66,10 +71,12 @@ function Index() {
     document.documentElement.dir = "rtl";
   }, []);
 
-  const handleSubmit = (message: { text?: string }) => {
+  const handleSubmit = async (message: PromptInputMessage) => {
     const text = (message.text ?? input).trim();
-    if (!text || isLoading) return;
-    sendMessage({ text });
+    const hasFiles = message.files && message.files.length > 0;
+    if ((!text && !hasFiles) || isLoading) return;
+    const files = hasFiles ? await inlineFilePartUrls(message.files) : undefined;
+    sendMessage({ text: text || "صف هذي الصورة", files });
     setInput("");
   };
 
@@ -166,24 +173,9 @@ function Index() {
             </div>
           ) : (
             <div className="space-y-2">
-              {messages.map((m) => {
-                const text = m.parts
-                  .map((p) => (p.type === "text" ? p.text : ""))
-                  .join("");
-                return (
-                  <Message from={m.role} key={m.id} className="animate-fade-in-up">
-                    {m.role === "assistant" ? (
-                      <div className="max-w-[85%] text-[15px] leading-relaxed text-foreground">
-                        <MessageResponse>{text}</MessageResponse>
-                      </div>
-                    ) : (
-                      <MessageContent className="max-w-[80%] rounded-2xl rounded-tl-md bg-primary/90 px-4 py-2.5 text-primary-foreground shadow-[0_4px_20px_oklch(0.74_0.18_295_/_0.25)]">
-                        <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{text}</div>
-                      </MessageContent>
-                    )}
-                  </Message>
-                );
-              })}
+              {messages.map((m) => (
+                <ChatBubble key={m.id} message={m} speak={speak} activeId={activeId} speakStatus={speakStatus} />
+              ))}
               {status === "submitted" && (
                 <div className="px-2 py-3">
                   <Shimmer>عبوسي يفكر...</Shimmer>
