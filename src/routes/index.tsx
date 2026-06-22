@@ -227,3 +227,91 @@ function Index() {
     </div>
   );
 }
+
+function AttachButton() {
+  const { openFileDialog } = usePromptInputAttachments();
+  return (
+    <button
+      type="button"
+      onClick={openFileDialog}
+      aria-label="إرفاق صورة"
+      className="grid size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+    >
+      <Paperclip className="size-4" />
+    </button>
+  );
+}
+
+type UIMessageLike = ReturnType<typeof useChat>["messages"][number];
+
+function ChatBubble({
+  message,
+  speak,
+  activeId,
+  speakStatus,
+}: {
+  message: UIMessageLike;
+  speak: (id: string, text: string) => void;
+  activeId: string | null;
+  speakStatus: "idle" | "loading" | "speaking";
+}) {
+  const text = message.parts
+    .map((p) => (p.type === "text" ? p.text : ""))
+    .join("");
+  const imageParts = message.parts.filter(
+    (p): p is Extract<typeof p, { type: "file" }> =>
+      p.type === "file" && typeof (p as { mediaType?: string }).mediaType === "string" &&
+      (p as { mediaType: string }).mediaType.startsWith("image/"),
+  );
+  const isActive = activeId === message.id;
+
+  if (message.role === "assistant") {
+    return (
+      <Message from="assistant" className="animate-fade-in-up">
+        <div className="group max-w-[85%] text-[15px] leading-relaxed text-foreground">
+          <MessageResponse>{text}</MessageResponse>
+          {text && (
+            <div className="mt-1.5 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100 has-[button[aria-pressed=true]]:opacity-100">
+              <button
+                type="button"
+                onClick={() => speak(message.id, text)}
+                aria-pressed={isActive}
+                aria-label={isActive ? "إيقاف القراءة" : "اقرأ بصوت عالٍ"}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+              >
+                {isActive ? <Square className="size-3" /> : <Volume2 className="size-3" />}
+                {isActive
+                  ? speakStatus === "loading"
+                    ? "جاري التحميل..."
+                    : "إيقاف"
+                  : "اقرأ"}
+              </button>
+            </div>
+          )}
+        </div>
+      </Message>
+    );
+  }
+
+  return (
+    <Message from="user" className="animate-fade-in-up">
+      <MessageContent className="max-w-[80%] rounded-2xl rounded-tl-md bg-primary/90 px-3 py-2.5 text-primary-foreground shadow-[0_4px_20px_oklch(0.74_0.18_295_/_0.25)]">
+        {imageParts.length > 0 && (
+          <div className="mb-2 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${Math.min(imageParts.length, 2)}, minmax(0, 1fr))` }}>
+            {imageParts.map((p, i) => (
+              <img
+                key={i}
+                src={(p as { url: string }).url}
+                alt=""
+                className="max-h-56 w-full rounded-xl object-cover"
+              />
+            ))}
+          </div>
+        )}
+        {text && (
+          <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{text}</div>
+        )}
+      </MessageContent>
+    </Message>
+  );
+}
