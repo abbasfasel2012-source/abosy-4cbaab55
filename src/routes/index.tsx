@@ -47,9 +47,8 @@ function Index() {
     document.documentElement.dir = "rtl";
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const text = input.trim();
+  const handleSubmit = (message: { text?: string }) => {
+    const text = (message.text ?? input).trim();
     if (!text || isLoading) return;
     sendMessage({ text });
     setInput("");
