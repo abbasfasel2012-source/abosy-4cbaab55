@@ -159,6 +159,10 @@
   body[dir="rtl"] {
     font-family: "IBM Plex Sans Arabic", "Inter", system-ui, sans-serif;
   }
+
+  #lovable-badge {
+    display: none !important;
+  }
 }
 
 /* Liquid glass utilities */
