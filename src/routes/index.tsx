@@ -13,6 +13,8 @@ import {
   PromptInputTextarea,
   PromptInputFooter,
   PromptInputSubmit,
+  usePromptInputAttachments,
+  type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import abosyLogo from "@/assets/abosy-logo.png";
@@ -23,7 +25,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Paperclip, Volume2, Square } from "lucide-react";
+import { AttachmentsBar } from "@/components/chat/attachments-bar";
+import { inlineFilePartUrls } from "@/lib/file-utils";
+import { useSpeak } from "@/lib/use-speak";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -56,6 +61,8 @@ function Index() {
   ).current;
   const { messages, sendMessage, status, error } = useChat({ transport });
 
+  const { speak, activeId, status: speakStatus } = useSpeak();
+
   const activeModel = MODELS.find((m) => m.id === modelId) ?? MODELS[0];
 
   const isLoading = status === "submitted" || status === "streaming";
@@ -66,10 +73,12 @@ function Index() {
     document.documentElement.dir = "rtl";
   }, []);
 
-  const handleSubmit = (message: { text?: string }) => {
+  const handleSubmit = async (message: PromptInputMessage) => {
     const text = (message.text ?? input).trim();
-    if (!text || isLoading) return;
-    sendMessage({ text });
+    const hasFiles = message.files && message.files.length > 0;
+    if ((!text && !hasFiles) || isLoading) return;
+    const files = hasFiles ? await inlineFilePartUrls(message.files) : undefined;
+    sendMessage({ text: text || "صف هذي الصورة", files });
     setInput("");
   };
 
@@ -166,24 +175,9 @@ function Index() {
             </div>
           ) : (
             <div className="space-y-2">
-              {messages.map((m) => {
-                const text = m.parts
-                  .map((p) => (p.type === "text" ? p.text : ""))
-                  .join("");
-                return (
-                  <Message from={m.role} key={m.id} className="animate-fade-in-up">
-                    {m.role === "assistant" ? (
-                      <div className="max-w-[85%] text-[15px] leading-relaxed text-foreground">
-                        <MessageResponse>{text}</MessageResponse>
-                      </div>
-                    ) : (
-                      <MessageContent className="max-w-[80%] rounded-2xl rounded-tl-md bg-primary/90 px-4 py-2.5 text-primary-foreground shadow-[0_4px_20px_oklch(0.74_0.18_295_/_0.25)]">
-                        <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{text}</div>
-                      </MessageContent>
-                    )}
-                  </Message>
-                );
-              })}
+              {messages.map((m) => (
+                <ChatBubble key={m.id} message={m} speak={speak} activeId={activeId} speakStatus={speakStatus} />
+              ))}
               {status === "submitted" && (
                 <div className="px-2 py-3">
                   <Shimmer>عبوسي يفكر...</Shimmer>
@@ -204,18 +198,24 @@ function Index() {
       <div className="relative z-10 mx-auto w-full max-w-3xl px-4 pb-5 pt-2">
         <PromptInput
           onSubmit={handleSubmit}
+          accept="image/*"
+          multiple
+          maxFiles={4}
+          maxFileSize={8 * 1024 * 1024}
           className="glass-strong rounded-3xl !border-white/15 overflow-hidden focus-within:!border-primary/50 focus-within:shadow-[0_0_0_3px_oklch(0.74_0.18_295_/_0.15)] transition-all"
         >
+          <AttachmentsBar />
           <PromptInputTextarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="اكتب رسالتك لعبوسي..."
             className="!bg-transparent !text-[15px] placeholder:text-muted-foreground/60"
           />
-          <PromptInputFooter className="justify-end px-2 pb-2">
+          <PromptInputFooter className="items-center justify-between gap-2 px-2 pb-2">
+            <AttachButton />
             <PromptInputSubmit
               status={status}
-              disabled={!input.trim() || isLoading}
+              disabled={isLoading}
               className="rounded-full bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-[0_4px_20px_oklch(0.74_0.18_295_/_0.4)] hover:opacity-90"
             />
           </PromptInputFooter>
@@ -225,5 +225,93 @@ function Index() {
         </p>
       </div>
     </div>
+  );
+}
+
+function AttachButton() {
+  const { openFileDialog } = usePromptInputAttachments();
+  return (
+    <button
+      type="button"
+      onClick={openFileDialog}
+      aria-label="إرفاق صورة"
+      className="grid size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+    >
+      <Paperclip className="size-4" />
+    </button>
+  );
+}
+
+type UIMessageLike = ReturnType<typeof useChat>["messages"][number];
+
+function ChatBubble({
+  message,
+  speak,
+  activeId,
+  speakStatus,
+}: {
+  message: UIMessageLike;
+  speak: (id: string, text: string) => void;
+  activeId: string | null;
+  speakStatus: "idle" | "loading" | "speaking";
+}) {
+  const text = message.parts
+    .map((p) => (p.type === "text" ? p.text : ""))
+    .join("");
+  const imageParts = message.parts.filter(
+    (p): p is Extract<typeof p, { type: "file" }> =>
+      p.type === "file" && typeof (p as { mediaType?: string }).mediaType === "string" &&
+      (p as { mediaType: string }).mediaType.startsWith("image/"),
+  );
+  const isActive = activeId === message.id;
+
+  if (message.role === "assistant") {
+    return (
+      <Message from="assistant" className="animate-fade-in-up">
+        <div className="group max-w-[85%] text-[15px] leading-relaxed text-foreground">
+          <MessageResponse>{text}</MessageResponse>
+          {text && (
+            <div className="mt-1.5 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100 has-[button[aria-pressed=true]]:opacity-100">
+              <button
+                type="button"
+                onClick={() => speak(message.id, text)}
+                aria-pressed={isActive}
+                aria-label={isActive ? "إيقاف القراءة" : "اقرأ بصوت عالٍ"}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+              >
+                {isActive ? <Square className="size-3" /> : <Volume2 className="size-3" />}
+                {isActive
+                  ? speakStatus === "loading"
+                    ? "جاري التحميل..."
+                    : "إيقاف"
+                  : "اقرأ"}
+              </button>
+            </div>
+          )}
+        </div>
+      </Message>
+    );
+  }
+
+  return (
+    <Message from="user" className="animate-fade-in-up">
+      <MessageContent className="max-w-[80%] rounded-2xl rounded-tl-md bg-primary/90 px-3 py-2.5 text-primary-foreground shadow-[0_4px_20px_oklch(0.74_0.18_295_/_0.25)]">
+        {imageParts.length > 0 && (
+          <div className="mb-2 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${Math.min(imageParts.length, 2)}, minmax(0, 1fr))` }}>
+            {imageParts.map((p, i) => (
+              <img
+                key={i}
+                src={(p as { url: string }).url}
+                alt=""
+                className="max-h-56 w-full rounded-xl object-cover"
+              />
+            ))}
+          </div>
+        )}
+        {text && (
+          <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{text}</div>
+        )}
+      </MessageContent>
+    </Message>
   );
 }
