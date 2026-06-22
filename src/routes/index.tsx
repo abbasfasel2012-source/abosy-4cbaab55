@@ -16,6 +16,14 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import abosyLogo from "@/assets/abosy-logo.png";
+import { MODELS, DEFAULT_MODEL_ID } from "@/lib/models";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Check, ChevronDown } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -35,9 +43,20 @@ const SUGGESTIONS = [
 ];
 
 function Index() {
-  const transport = useRef(new DefaultChatTransport({ api: "/api/chat" })).current;
   const [input, setInput] = useState("");
+  const [modelId, setModelId] = useState<string>(DEFAULT_MODEL_ID);
+  const modelRef = useRef(modelId);
+  modelRef.current = modelId;
+
+  const transport = useRef(
+    new DefaultChatTransport({
+      api: "/api/chat",
+      body: () => ({ model: modelRef.current }),
+    }),
+  ).current;
   const { messages, sendMessage, status, error } = useChat({ transport });
+
+  const activeModel = MODELS.find((m) => m.id === modelId) ?? MODELS[0];
 
   const isLoading = status === "submitted" || status === "streaming";
   const isEmpty = messages.length === 0;
@@ -81,9 +100,42 @@ function Index() {
             <span className="text-[11px] text-muted-foreground">مساعد عراقي ذكي</span>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_currentColor]" />
-          متصل
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger className="glass flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium text-foreground/90 transition-colors hover:bg-white/[0.10] focus:outline-none focus:ring-2 focus:ring-primary/40">
+              <span className="grid size-5 place-items-center rounded-full bg-gradient-to-br from-primary to-accent text-[10px] font-bold text-primary-foreground">
+                {activeModel.icon}
+              </span>
+              <span>{activeModel.name}</span>
+              <ChevronDown className="size-3.5 opacity-60" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="glass-strong min-w-[260px] rounded-2xl border-white/15 p-1.5 text-right"
+            >
+              {MODELS.map((m) => {
+                const selected = m.id === modelId;
+                return (
+                  <DropdownMenuItem
+                    key={m.id}
+                    onSelect={() => setModelId(m.id)}
+                    className="flex cursor-pointer items-start gap-3 rounded-xl px-3 py-2.5 text-right focus:bg-white/10"
+                  >
+                    <span className="grid size-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary/80 to-accent/80 text-xs font-bold text-primary-foreground">
+                      {m.icon}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-foreground">{m.name}</span>
+                        {selected && <Check className="size-4 text-primary" />}
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">{m.description}</p>
+                    </div>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
