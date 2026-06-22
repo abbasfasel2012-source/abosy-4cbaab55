@@ -61,6 +61,8 @@ function Index() {
   ).current;
   const { messages, sendMessage, status, error } = useChat({ transport });
 
+  const { speak, activeId, status: speakStatus } = useSpeak();
+
   const activeModel = MODELS.find((m) => m.id === modelId) ?? MODELS[0];
 
   const isLoading = status === "submitted" || status === "streaming";
@@ -196,18 +198,24 @@ function Index() {
       <div className="relative z-10 mx-auto w-full max-w-3xl px-4 pb-5 pt-2">
         <PromptInput
           onSubmit={handleSubmit}
+          accept="image/*"
+          multiple
+          maxFiles={4}
+          maxFileSize={8 * 1024 * 1024}
           className="glass-strong rounded-3xl !border-white/15 overflow-hidden focus-within:!border-primary/50 focus-within:shadow-[0_0_0_3px_oklch(0.74_0.18_295_/_0.15)] transition-all"
         >
+          <AttachmentsBar />
           <PromptInputTextarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="اكتب رسالتك لعبوسي..."
             className="!bg-transparent !text-[15px] placeholder:text-muted-foreground/60"
           />
-          <PromptInputFooter className="justify-end px-2 pb-2">
+          <PromptInputFooter className="items-center justify-between gap-2 px-2 pb-2">
+            <AttachButton />
             <PromptInputSubmit
               status={status}
-              disabled={!input.trim() || isLoading}
+              disabled={isLoading}
               className="rounded-full bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-[0_4px_20px_oklch(0.74_0.18_295_/_0.4)] hover:opacity-90"
             />
           </PromptInputFooter>
